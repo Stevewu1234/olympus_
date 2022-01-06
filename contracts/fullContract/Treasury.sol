@@ -447,15 +447,6 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
         OHMDEBTOR
     }
 
-    struct Queue {
-        STATUS managing;
-        address toPermit;
-        address calculator;
-        uint256 timelockEnd;
-        bool nullify;
-        bool executed;
-    }
-
     /* ========== STATE VARIABLES ========== */
 
     IOHM public immutable OHM;
@@ -471,14 +462,6 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
     uint256 public totalDebt;
     uint256 public ohmDebt;
 
-    Queue[] public permissionQueue;
-    uint256 public immutable blocksNeededForQueue;
-
-    bool public timelockEnabled;
-    bool public initialized;
-
-    uint256 public onChainGovernanceTimelock;
-
     string internal notAccepted = "Treasury: not accepted";
     string internal notApproved = "Treasury: not approved";
     string internal invalidToken = "Treasury: invalid token";
@@ -488,15 +471,10 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
 
     constructor(
         address _ohm,
-        uint256 _timelock,
         address _authority
     ) OlympusAccessControlled(IOlympusAuthority(_authority)) {
         require(_ohm != address(0), "Zero address: OHM");
         OHM = IOHM(_ohm);
-
-        timelockEnabled = false;
-        initialized = false;
-        blocksNeededForQueue = _timelock;
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
@@ -688,7 +666,7 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
     }
 
     /**
-     * @notice enable permission from queue
+     * @notice enable permission
      * @param _status STATUS
      * @param _address address
      * @param _calculator address
@@ -698,7 +676,6 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
         address _address,
         address _calculator
     ) external onlyGovernor {
-        require(timelockEnabled == false, "Use queueTimelock");
         if (_status == STATUS.SOHM) {
             sOHM = IsOHM(_address);
         } else {
@@ -746,106 +723,6 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
             }
         }
         return (false, 0);
-    }
-
-    /* ========== TIMELOCKED FUNCTIONS ========== */
-
-    // functions are used prior to enabling on-chain governance
-
-    /**
-     * @notice queue address to receive permission
-     * @param _status STATUS
-     * @param _address address
-     * @param _calculator address
-     */
-    function queueTimelock(
-        STATUS _status,
-        address _address,
-        address _calculator
-    ) external onlyGovernor {
-        require(_address != address(0));
-        require(timelockEnabled == true, "Timelock is disabled, use enable");
-
-        uint256 timelock = block.number.add(blocksNeededForQueue);
-        if (_status == STATUS.RESERVEMANAGER || _status == STATUS.LIQUIDITYMANAGER) {
-            timelock = block.number.add(blocksNeededForQueue.mul(2));
-        }
-        permissionQueue.push(
-            Queue({managing: _status, toPermit: _address, calculator: _calculator, timelockEnd: timelock, nullify: false, executed: false})
-        );
-        emit PermissionQueued(_status, _address);
-    }
-
-    /**
-     *  @notice enable queued permission
-     *  @param _index uint256
-     */
-    function execute(uint256 _index) external {
-        require(timelockEnabled == true, "Timelock is disabled, use enable");
-
-        Queue memory info = permissionQueue[_index];
-
-        require(!info.nullify, "Action has been nullified");
-        require(!info.executed, "Action has already been executed");
-        require(block.number >= info.timelockEnd, "Timelock not complete");
-
-        if (info.managing == STATUS.SOHM) {
-            // 9
-            sOHM = IsOHM(info.toPermit);
-        } else {
-            permissions[info.managing][info.toPermit] = true;
-
-            if (info.managing == STATUS.LIQUIDITYTOKEN) {
-                bondCalculator[info.toPermit] = info.calculator;
-            }
-            (bool registered, ) = indexInRegistry(info.toPermit, info.managing);
-            if (!registered) {
-                registry[info.managing].push(info.toPermit);
-
-                if (info.managing == STATUS.LIQUIDITYTOKEN) {
-                    (bool reg, uint256 index) = indexInRegistry(info.toPermit, STATUS.RESERVETOKEN);
-                    if (reg) {
-                        delete registry[STATUS.RESERVETOKEN][index];
-                    }
-                } else if (info.managing == STATUS.RESERVETOKEN) {
-                    (bool reg, uint256 index) = indexInRegistry(info.toPermit, STATUS.LIQUIDITYTOKEN);
-                    if (reg) {
-                        delete registry[STATUS.LIQUIDITYTOKEN][index];
-                    }
-                }
-            }
-        }
-        permissionQueue[_index].executed = true;
-        emit Permissioned(info.toPermit, info.managing, true);
-    }
-
-    /**
-     * @notice cancel timelocked action
-     * @param _index uint256
-     */
-    function nullify(uint256 _index) external onlyGovernor {
-        permissionQueue[_index].nullify = true;
-    }
-
-    /**
-     * @notice disables timelocked functions
-     */
-    function disableTimelock() external onlyGovernor {
-        require(timelockEnabled == true, "timelock already disabled");
-        if (onChainGovernanceTimelock != 0 && onChainGovernanceTimelock <= block.number) {
-            timelockEnabled = false;
-        } else {
-            onChainGovernanceTimelock = block.number.add(blocksNeededForQueue.mul(7)); // 7-day timelock
-        }
-    }
-
-    /**
-     * @notice enables timelocks after initilization
-     */
-    function initialize() external onlyGovernor {
-        require(initialized == false, "Already initialized");
-        timelockEnabled = true;
-        initialized = true;
     }
 
     /* ========== VIEW FUNCTIONS ========== */

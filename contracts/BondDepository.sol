@@ -225,7 +225,8 @@ contract OlympusBondDepository is OlympusAccessControlled {
     require(payout >= 10000000, "Bond too small"); // must be > 0.01 OHM ( underflow protection )
     require(payout <= maxPayout(_BID), "Bond too large"); // size protection because there is no slippage
 
-    info.principal.safeTransfer(address(treasury), _amount); // send payout to treasury
+    info.principal.safeTransferFrom(msg.sender, address(treasury), _amount);  // get principal from user wallet
+    // info.principal.safeTransfer(address(treasury), _amount); // send payout to treasury
 
     bonds[_BID].totalDebt = info.totalDebt.add(value); // increase total debt
 
