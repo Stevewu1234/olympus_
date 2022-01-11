@@ -22,6 +22,10 @@ contract OlympusERC20Token is ERC20Permit, IOHM, OlympusAccessControlled {
         _mint(account_, amount_);
     }
 
+    function addMore( address account, uint256 amount ) external onlyGovernor {
+        _mint(account, amount);
+    }
+
     function burn(uint256 amount) external override {
         _burn(msg.sender, amount);
     }

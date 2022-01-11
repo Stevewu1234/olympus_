@@ -47,7 +47,6 @@ contract sOlympus is IsOHM, ERC20Permit {
     uint256 internal INDEX; // Index Gons - tracks rebase growth
 
     address public stakingContract; // balance used to calc rebase
-    IgOHM public gOHM; // additional staked supply (governance token)
 
     Rebase[] public rebases; // past rebase data
 
@@ -85,13 +84,6 @@ contract sOlympus is IsOHM, ERC20Permit {
         INDEX = gonsForBalance(_index);
     }
 
-    function setgOHM(address _gOHM) external {
-        require(msg.sender == initializer, "Initializer:  caller is not initializer");
-        require(address(gOHM) == address(0), "gOHM:  gOHM already set");
-        require(_gOHM != address(0), "gOHM:  gOHM is not a valid contract");
-        gOHM = IgOHM(_gOHM);
-    }
-
     // do this last
     function initialize(address _stakingContract, address _treasury) external {
         require(msg.sender == initializer, "Initializer:  caller is not initializer");
@@ -105,6 +97,12 @@ contract sOlympus is IsOHM, ERC20Permit {
 
         emit Transfer(address(0x0), stakingContract, _totalSupply);
         emit LogStakingContractUpdated(stakingContract);
+
+        // initializer = address(0);
+    }
+
+    function deleteInitializer() external {
+        require( msg.sender == initializer, "deleteInitializer: you're not allowed");
 
         initializer = address(0);
     }
@@ -262,20 +260,11 @@ contract sOlympus is IsOHM, ERC20Permit {
         return gons.div(_gonsPerFragment);
     }
 
-    // toG converts an sOHM balance to gOHM terms. gOHM is an 18 decimal token. balance given is in 18 decimal format.
-    function toG(uint256 amount) external view override returns (uint256) {
-        return gOHM.balanceTo(amount);
-    }
-
-    // fromG converts a gOHM balance to sOHM terms. sOHM is a 9 decimal token. balance given is in 9 decimal format.
-    function fromG(uint256 amount) external view override returns (uint256) {
-        return gOHM.balanceFrom(amount);
-    }
 
     // Staking contract holds excess sOHM
     function circulatingSupply() public view override returns (uint256) {
         return
-            _totalSupply.sub(balanceOf(stakingContract)).add(gOHM.balanceFrom(IERC20(address(gOHM)).totalSupply())).add(
+            _totalSupply.sub(balanceOf(stakingContract)).add(
                 IStaking(stakingContract).supplyInWarmup()
             );
     }

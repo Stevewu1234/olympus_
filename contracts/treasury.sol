@@ -333,7 +333,7 @@ contract OlympusTreasury is OlympusAccessControlled, ITreasury {
      * @return uint
      */
     function excessReserves() public view override returns (uint256) {
-        return totalReserves.sub(OHM.totalSupply().sub(totalDebt));
+        return totalReserves.sub(OHM.totalSupply()).sub(totalDebt);
     }
 
     /**
